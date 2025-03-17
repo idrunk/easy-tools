@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option go_package = "./et";
+
+message PbTopic {
+    string id = 1;
+    optional string key = 2;
+    optional string secret = 3;
+}
+
+message PbSignalling {
+    oneof sig {
+        uint32 req = 1;
+        string offer = 2;
+        string answer = 3;
+        string iceCandidate = 4;
+    }
+    string requester = 5;
+    optional string responder = 6;
+    optional string sender = 7;
+    optional string receiver = 8;
+}

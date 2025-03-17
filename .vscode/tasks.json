@@ -1,0 +1,27 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Protobuf compile",
+			"type": "shell",
+			"command": "${workspaceFolder}\\.res\\proto\\compile.bat",
+			"options": {
+				"env": {
+					"APP_ROOT": "${workspaceFolder}"
+				}
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Start nginx",
+			"type": "shell",
+			"command": "${workspaceFolder}\\.ignore\\nginx\\start.bat",
+			"options": {
+				"env": {
+					"APP_ROOT": "${workspaceFolder}"
+				}
+			},
+			"problemMatcher": []
+		},
+	]
+}
