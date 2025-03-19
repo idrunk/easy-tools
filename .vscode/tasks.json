@@ -23,5 +23,16 @@
 			},
 			"problemMatcher": []
 		},
+		{
+			"label": "App compile",
+			"type": "shell",
+			"command": "${workspaceFolder}\\.res\\script\\compile-app.bat",
+			"options": {
+				"env": {
+					"APP_ROOT": "${workspaceFolder}"
+				}
+			},
+			"problemMatcher": []
+		},
 	]
 }

@@ -7,11 +7,11 @@ export function formatBytes(bytes?: number, decimals: number = 2): string {
 }
 
 export class TimeId {
-    private static randWidth = BigInt(16);
-    private static randMask = (BigInt(1) << this.randWidth) - BigInt(1);
+    private static randWidth = 16n;
+    private static randMask = (1n << this.randWidth) - 1n;
     private static randUpperBoundary = Number(this.randMask) + 1;
     private static timeFactorWidth = 48;
-    private static timeFactorMask = (BigInt(1) << BigInt(this.timeFactorWidth)) - BigInt(1);
+    private static timeFactorMask = (1n << BigInt(this.timeFactorWidth)) - 1n;
 
     private time: Date;
     private randPart: bigint;
@@ -85,11 +85,11 @@ export function debounce<T extends (...args: any[]) => any>(
     wait: number = 200,
 ) {
     let timeout: ReturnType<typeof setTimeout>;
-    return function (this: any, ...args: Parameters<T>) {
+    return function(this: any, ...args: Parameters<T>) {
         const context = this as any;
         clearTimeout(timeout);
         timeout = setTimeout(() => {
             func.apply(context, args);
-        }, wait)
+        }, wait);
     };
 }

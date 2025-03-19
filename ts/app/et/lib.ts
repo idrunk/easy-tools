@@ -69,7 +69,7 @@ export class Chat {
             name: file.name,
             type: file.type,
             size: BigInt(file.size),
-            modified: BigInt(file.lastModified),
+            modified: BigInt(Math.abs(file.lastModified)),
             state: PbChat_DownloadState.Downloadable,
         };
         return imgSize 
@@ -190,7 +190,13 @@ export class Chat {
                     if (['meta', 'load', 'code'].some(kind => kind === t.container.oneofKind)) {
                         Receiver.inst(t.msgId, communicator as WebRTCCommunicator).handle(t);
                     } else {
-                        Sender.inst(t.msgId, communicator as WebRTCCommunicator).handle(t);
+                        const sender = Sender.inst(t.msgId, communicator as WebRTCCommunicator);
+                        sender.bind({
+                            onSendProgress() {
+                                console.log('msgId:', this.reqId, 'speed:', this.speed, 'progress:', this.progress);
+                            },
+                        })
+                        sender.handle(t);
                     }
                 })
         );

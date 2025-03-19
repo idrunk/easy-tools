@@ -7,7 +7,7 @@ export function FileSelector({ children, accept, multiple = false, onFiles, clas
     onFiles: (files: FileList) => void,
 } & HTMLProps<HTMLButtonElement>) {
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const onChange = (files: FileList | null) => files && onFiles(files)
+    const onChange = (files: FileList | null) => files && onFiles(files);
     return (
         <>
             <input
@@ -15,7 +15,7 @@ export function FileSelector({ children, accept, multiple = false, onFiles, clas
                 type="file"
                 accept={accept}
                 multiple={multiple}
-                style={{ display: 'none' }}
+                style={{ opacity: 0, position: 'absolute', width: 0, height: 0 }}
                 onChange={e => onChange(e.target.files)}
             />
             <button onClick={() => fileInputRef.current?.click()} className={className}>{children}</button>

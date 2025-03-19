@@ -84,7 +84,7 @@ export function MessageBox({ msg }: { msg: MessageView }): React.ReactNode {
                     <span className="text-gray-700">{msg.user?.nick}</span>
                     <span className="ml-2 text-gray-500"><MessageTime msg={msg} /></span>
                 </p>
-                <p className={"mt-1 p-1 pl-3 pr-3 rounded-lg leading-6 text-sm whitespace-pre-wrap " + (msg.mine ? "bg-sky-500 text-white" : "bg-gray-100")}>
+                <p className={"mt-1 p-1 pl-3 pr-3 rounded-lg leading-6 text-sm break-all whitespace-pre-wrap " + (msg.mine ? "bg-sky-500 text-white" : "bg-gray-100")}>
                     {children}
                 </p>
             </div>

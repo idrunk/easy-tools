@@ -78,29 +78,26 @@ export abstract class Transporter {
         return speed;
     }
 
+    private get tickReceiveKey(): string {
+        return `receiving-${this.reqId}`;
+    }
+    private get tickSendKey(): string {
+        return `sending-${this.reqId}`;
+    }
+
     protected events!: ReceiverEvents & SenderEvents;
     public bind(events: ReceiverEvents & SenderEvents) {
-        if (this instanceof Receiver) {
-            if (events.onReceiveStart) events.onReceiveStart = events.onReceiveStart;
-            if (events.onReceiveProgress) {
-                events.onReceiveProgress = events.onReceiveProgress;
-                TickCall.one.put('receiving', events.onReceiveProgress);
-            }
-            if (events.onReceiveStopped) events.onReceiveStopped = events.onReceiveStopped;
-        } else if (this instanceof Sender) {
-            if (events.onSendStart) events.onSendStart = events.onSendStart;
-            if (events.onSendProgress) {
-                events.onSendProgress = events.onSendProgress;
-                TickCall.one.put('sending', events.onSendProgress);
-            }
-            if (events.onSendStopped) events.onSendStopped = events.onSendStopped;
+        if (this instanceof Receiver && events.onReceiveProgress) {
+            TickCall.one.put(this.tickReceiveKey, events.onReceiveProgress.bind(this));
+        } else if (this instanceof Sender && events.onSendProgress) {
+            TickCall.one.put(this.tickSendKey, events.onSendProgress.bind(this));
         }
         this.events = events;
     }
 
     public unbind() {
         this.events = {};
-        TickCall.one.del('receiving', 'sending');
+        TickCall.one.del(this.tickReceiveKey, this.tickSendKey);
     }
 
     public static genPbTransporter<K extends PbTransporterKind>(msgId: string, loadId: string, kind: K, value: PbTransporterValue<K>): PbTransporter {
@@ -166,6 +163,7 @@ export class Receiver extends Transporter {
         }
         this.writer && this.writer.close();
         this.events?.onReceiveStopped && this.events.onReceiveStopped.call(this);
+        this.unbind();
         Receiver.removeInstance(this);
     }
 
@@ -342,6 +340,7 @@ export class Sender extends Transporter {
             this.error = code;
         }
         this.events?.onSendStopped && this.events.onSendStopped.call(this);
+        this.unbind();
         Sender.removeInstance(this);
     }
 
@@ -368,7 +367,7 @@ export class Sender extends Transporter {
     private static filePool: Map<string, File> = new Map();
     // 上架本地文件，返回其ID
     public static listFile(file: File): string {
-        const fileId = ((BigInt(file.size) << BigInt(48)) | (BigInt(file.lastModified) & BigInt(0xffffffffffff))).toString(36);
+        const fileId = ((BigInt(file.size) << 48n) | (BigInt(Math.abs(file.lastModified)) & 0xffffffffffffn)).toString(36);
         !this.filePool.has(fileId) && this.filePool.set(fileId, file);
         return fileId;
     }

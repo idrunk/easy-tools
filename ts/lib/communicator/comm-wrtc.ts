@@ -258,8 +258,11 @@ export class WebRTCRouter {
         return this.peerProtocol;
     }
 
-    private static instance: WebRTCRouter;
+    public static isSupported(): boolean {
+        return typeof RTCPeerConnection !== 'undefined';
+    }
 
+    private static instance: WebRTCRouter;
     public static inst(tid: string, webrtcOptions?: WebRTCCommunicatorOptions | {}): WebRTCRouter {
         if (! this.instance) {
             this.instance = new WebRTCRouter(tid, App.cw, Object.assign({
