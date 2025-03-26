@@ -172,6 +172,7 @@ func (t *Topic) SendTo(ctx *flex.Websocket, sig *PbSignalling) error {
 						go conn.Write(ctx, websocket.MessageBinary, pkg.Serialize())
 					}
 				}
+				break
 			}
 		}
 	}

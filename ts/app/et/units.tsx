@@ -4,6 +4,7 @@ import { Chat, MessageView } from "./lib";
 import { PbChat_DownloadState } from "@/lib/model/et/et";
 import dayjs from "dayjs";
 import Image from "next/image";
+import { Html5Qrcode } from "html5-qrcode";
 
 export function MessageSummary({msg}: {msg: MessageView}): React.ReactNode {
     if (msg.body.oneofKind === 'text') {
@@ -91,4 +92,62 @@ export function MessageBox({ msg }: { msg: MessageView }): React.ReactNode {
             <div className="mt-1 ml-2 w-9 text-3xl ">{msg.mine && "😶"}</div>
         </li>
     )
+}
+
+export class QrcodeScanner {
+    private html5qrcode!: Html5Qrcode;
+
+    public async render(elementId: string, width: number, onDecoded: (decoded: string) => void, onError?: (err: string|Error) => void) {
+        try {
+            await Html5Qrcode.getCameras();
+        } catch (_) {
+            if (onError) onError(new Error('未检测到摄像头'));
+            return;
+        }
+        let errored = false;
+        this.html5qrcode = new Html5Qrcode(elementId, true);
+        this.html5qrcode.start({
+            facingMode: 'environment',
+        }, {
+            fps: 10,
+            qrbox: {
+                width,
+                height: width
+            },
+            aspectRatio: 1,
+        }, onDecoded, err => {
+            if (errored) return;
+            errored = true;
+            onError && onError(err);
+        });
+    }
+
+    public unload() {
+        if (!this.html5qrcode) return;
+        this.html5qrcode.stop().then(() => this.html5qrcode.clear());
+    }
+
+    public setTorch(torch: boolean) {
+        if (!this.html5qrcode || !(this.html5qrcode.getRunningTrackCapabilities() as MediaTrackCapabilities & {torch: boolean}).torch) return;
+        this.html5qrcode.applyVideoConstraints({ advanced: [{ torch } as MediaTrackConstraintSet]});
+    }
+
+    public zoom(zoom: number) {
+        if (!this.html5qrcode) return;
+        const zoomCapabilities = (this.html5qrcode.getRunningTrackCapabilities() as MediaTrackCapabilities & { zoom: DoubleRange & { step: number } }).zoom;
+        if (zoomCapabilities?.max === undefined || zoomCapabilities?.min === undefined) return;
+        const step = zoomCapabilities.step ?? 0.1;
+        const totalStep = (zoomCapabilities.max - zoomCapabilities.min) / step;
+        zoom = zoomCapabilities.min + Math.round(totalStep * zoom / 100) * step;
+        if (zoom > zoomCapabilities.max) zoom = zoomCapabilities.max;
+        this.html5qrcode.applyVideoConstraints({ advanced: [{ zoom } as MediaTrackConstraintSet] });
+    }
+
+    private static instance: QrcodeScanner;
+    public static get one(): QrcodeScanner {
+        if (! this.instance) {
+            this.instance = new QrcodeScanner();
+        }
+        return this.instance;
+    }
 }

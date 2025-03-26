@@ -85,7 +85,7 @@ func EasyTransferApis() {
 				Value: sid,
 				Path: "/",
 				HttpOnly: true,
-				Secure: false,
+				Secure: true,
 				SameSite: http.SameSiteLaxMode,
 				MaxAge: app.SessionTtlMin * 60,
 			}

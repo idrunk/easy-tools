@@ -3,11 +3,11 @@
 import Image from "next/image";
 import Link from "next/link";
 import QrScan from "@/img/qrcode-scan-128.png"
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useToast } from "@/lib/ui/toast";
 import { redirect } from "next/navigation";
 import { Chat, TopicView } from "./lib";
-import { MessageSummary, MessageTime } from "./units";
+import { MessageSummary, MessageTime, QrcodeScanner } from "./units";
 
 export default function EasyTransfer() {
     const toast = useToast();
@@ -21,6 +21,31 @@ export default function EasyTransfer() {
     useEffect(() => {
         Chat.topicList().then(topics => setTopics(topics));
     }, []);
+
+    const maxCameraWidth = 320;
+    const cameraPadding = 15;
+    const cameraWidth = useRef(maxCameraWidth);
+    const [scannerOpened, setScannerOpened] = useState(false);
+    const scannerBoxId = 'scanner-box-id';
+    const openScanner = () => setScannerOpened(true);
+    const closeScanner = () => {
+        QrcodeScanner.one.unload();
+        setScannerOpened(false);
+    }
+    useEffect(() => {
+        if (window?.innerWidth < maxCameraWidth + cameraPadding * 2) cameraWidth.current = window?.innerWidth - cameraPadding * 2;
+        scannerOpened && setTimeout(() => QrcodeScanner.one.render(scannerBoxId, cameraWidth.current, decoded => {
+            if (/^https:\/\//.test(decoded)) {
+                closeScanner();
+                location.href = decoded;
+            }
+        }, err => err instanceof Error && toast(err.message)), 0);
+    }, [scannerOpened]);
+    const zoomScanner = (value: number) => QrcodeScanner.one.zoom(value);
+    const [torch, setTorch] = useState(false);
+    useEffect(() => {
+        QrcodeScanner.one.setTorch(torch);
+    }, [torch]);
     return (
         <div className="p-2">
             <div className="flex flex-row h-24">
@@ -34,10 +59,25 @@ export default function EasyTransfer() {
                     </div>
                 </form>
                 <div className="w-24 h-24 flex justify-center items-center">
-                    {/* <Link className="w-20 h-20 relative" href="/scanner"> */}
-                    <button className="w-20 h-20 relative" onClick={() => toast("暂未实现，请使用浏览器或微信的扫一扫")}>
+                    <button className="w-20 h-20 relative" onClick={openScanner}>
                         <Image src={QrScan} alt="Qrcode scan" fill />
                     </button>
+                    {scannerOpened  && <div className="fixed w-screen h-screen left-0 top-0 flex flex-col justify-center items-center bg-slate-500">
+                        <div style={{ width: cameraWidth.current }}>
+                            <div className="flex justify-between">
+                                <button onClick={() => setTorch(!torch)} className="border border-sky-500 rounded p-1 pl-4 pr-4 text-sm text-white bg-sky-500">
+                                    {torch ? '关灯' : '开灯'}
+                                </button>
+                                <button onClick={closeScanner} className="border border-sky-500 rounded p-1 pl-4 pr-4 text-sm text-white bg-sky-500">返回</button>
+                            </div>
+                            <div className="mt-4">
+                                <div id={scannerBoxId} style={{ width: cameraWidth.current, height: cameraWidth.current }}></div>
+                            </div>
+                            <div className="mt-4">
+                                <input type="range" min={0} max={100} defaultValue={0} onChange={e => zoomScanner(parseInt(e.target.value))} className="w-full" />
+                            </div>
+                        </div>
+                    </div>}
                 </div>
             </div>
             <div className="mt-3">
