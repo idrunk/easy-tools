@@ -1,3 +1,4 @@
+import log from "../utils/log";
 import TimePromise from "../utils/promise";
 import { Communicator, CommunicatorOptions, RequestOptions, RespError, Response, SendableData, TransferableData } from "./base";
 
@@ -180,7 +181,7 @@ export abstract class LongCommunicator implements Communicator {
             // 如果等待期间发过数据，则延到下轮再ping
             if (new Date().getTime() - this.lastMessage < (this.options.keepAlivePeriod || 0))
                 return this.keepAlive();
-            console.log(`${this.constructor.name} ping sent`);
+            log.debug(`${this.constructor.name} ping sent`);
             this.ping().then(_ => this.keepAlive()).catch(_ => this.setState(ConnectionState.Disconnected));
         }, period < 0 ? 0 : period);
     }

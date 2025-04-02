@@ -9,6 +9,7 @@ import { debounce, sortDeduplicateMergeTo, TimeId } from "@/lib/utils/mixed";
 import Dexie, { EntityTable } from "dexie";
 import { redirect } from "next/navigation";
 import { Receiver, Sender, TransportPath } from "./transporter";
+import log from "@/lib/utils/log";
 
 const MsgPath = 'msg';
 
@@ -95,7 +96,7 @@ export class Chat {
         conn.send(MsgPath, PbChat.toBinary(reqMsgPack));
         // 请求下载文件
         const readable = await Receiver.inst(reqMsg.timeId, conn).request(file.id);
-        console.log(readable, reqMsg);
+        // log.debug('readable', readable, 'reqMsg', reqMsg);
         exportStream(readable, reqMsg.body.oneofKind === 'file' ? reqMsg.body.file.name : String(new Date().getTime()));
     }
 
@@ -186,14 +187,14 @@ export class Chat {
             (resp, communicator) => resp.arrayBuffer()
                 .then(ab => PbTransporter.fromBinary(new Uint8Array(ab)))
                 .then(t => {
-                    console.log(t);
+                    log.debug('t', t);
                     if (['meta', 'load', 'code'].some(kind => kind === t.container.oneofKind)) {
                         Receiver.inst(t.msgId, communicator as WebRTCCommunicator).handle(t);
                     } else {
                         const sender = Sender.inst(t.msgId, communicator as WebRTCCommunicator);
                         sender.bind({
                             onSendProgress() {
-                                console.log('msgId:', this.reqId, 'speed:', this.speed, 'progress:', this.progress);
+                                log.debug('msgId:', this.reqId, 'speed:', this.speed, 'progress:', this.progress);
                             },
                         })
                         sender.handle(t);

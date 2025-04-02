@@ -2,6 +2,7 @@
 
 import { WebRTCCommunicator } from "@/lib/communicator/comm-wrtc";
 import { PbTransporter, PbTransporter_Code, PbTransporter_Meta } from "@/lib/model/et/et";
+import log from "@/lib/utils/log";
 import TimePromise from "@/lib/utils/promise";
 
 type PbTransporterKind = Exclude<PbTransporter['container']['oneofKind'], undefined>;
@@ -131,7 +132,7 @@ export class Receiver extends Transporter {
     public async request(loadId: string): Promise<ReadableStream> {
         const req = Receiver.genPbTransporter(this.reqId, loadId, 'startOrEnd', true);
         this.communicator.send(TransportPath, PbTransporter.toBinary(req));
-        console.log(req);
+        // log.debug('req', req);
         return TimePromise.register(TransportPath, this.reqId, 8000, 'Request failed, response timed out.');
     }
 
@@ -146,7 +147,6 @@ export class Receiver extends Transporter {
             const { readable, writable } = new TransformStream();
             promise.resolve(readable);
             this.writer = writable.getWriter();
-            console.log(this);
         }
         this.events?.onReceiveStart && this.events.onReceiveStart.call(this);
         // 发送 0 值ack以便告知发送器开始发送数据
@@ -167,18 +167,8 @@ export class Receiver extends Transporter {
         Receiver.removeInstance(this);
     }
 
-    private handleWrite(roundBuffers: ReceivedBuffers) {
-        if (!this.writer) return;
-        let index = 0;
-        const finalBlock = new Uint8Array(roundBuffers.capacity);
-        roundBuffers.blocks.forEach(block => finalBlock.set(block as Uint8Array, (index++) * BlockSize));
-        // 合并写入优化IO
-        console.log(finalBlock);
-        this.writer.write(finalBlock);
-    }
-
     private handleLoad(load: PbTransporterLoad, transporter: PbTransporter) {
-        console.log(load.index, this.blockIndex, this.maxAckIndex);
+        log.debug('index', load.index, 'blockIndex', this.blockIndex, 'maxAckIndex', this.maxAckIndex);
         const ackIndex = load.index - (load.index % AckRounds);
         const isLastRound = ackIndex >= this.maxAckIndex;
         const buffersLenth = !isLastRound ? AckRounds : this.totalBlock % AckRounds || AckRounds;
@@ -193,26 +183,45 @@ export class Receiver extends Transporter {
         }
         roundBuffers.blocks.set(load.index, load.body);
         roundBuffers.received ++;
-        console.log(this.maxAckIndex, this.blockIndex, ackIndex, this.blockIndex === ackIndex);
-        // 是否写块轮次（由于网络波动可能导致新块先到，由于需追加写入，所以仅当写入轮次时才进入写入逻辑，否则只在Map缓存）
-        if (this.blockIndex === ackIndex) {
-            console.log(isLastRound, roundBuffers);
+        log.debug('maxAckIndex', this.maxAckIndex, 'blockIndex', this.blockIndex, 'ackIndex', ackIndex, 'blockIndex === ackIndex', this.blockIndex === ackIndex);
+        if (
+            // 是否写块轮次（由于网络波动可能导致新块先到，由于需追加写入，所以仅当写入轮次时才进入写入逻辑，否则只在Map缓存）
+            this.blockIndex === ackIndex
             // 如果轮次缓存已全部收到，则递增代写索引，发送ack
             // （后续考虑超时重发机制，如一直未收到某块，则请求重发）
-            if (roundBuffers.received >= roundBuffers.blocks.size) {
-                this.handleWrite(roundBuffers);
-                let sig: PbTransporter;
-                if (isLastRound) {
-                    sig = Receiver.genPbTransporterBy(transporter, 'startOrEnd', false);
-                    this.handleStop();
-                } else {
-                    this.blockIndex += AckRounds;
-                    sig = Receiver.genPbTransporterBy(transporter, 'ack', buffersLenth);
-                }
-                this.communicator.send(TransportPath, PbTransporter.toBinary(sig));
-                this.blockBuffers.delete(ackIndex);
-            }
+            && roundBuffers.received >= roundBuffers.blocks.size
+        ) this.handleAck(roundBuffers, transporter);
+    }
+
+    private handleAck(roundBuffers: ReceivedBuffers, transporter: PbTransporter) {
+        const ackIndex = this.blockIndex;
+        const isLastRound = ackIndex >= this.maxAckIndex;
+        log.debug('isLastRound', isLastRound, 'roundBuffers', roundBuffers);
+        this.handleWrite(roundBuffers);
+        let sig: PbTransporter;
+        if (isLastRound) {
+            sig = Receiver.genPbTransporterBy(transporter, 'startOrEnd', false);
+            this.handleStop();
+        } else {
+            this.blockIndex = ackIndex + AckRounds;
+            const nextRoundBuffers = this.blockBuffers.get(this.blockIndex);
+            // 如果有下个轮次缓存，则表示有后序数据比当前的先到达
+            // 如果后序数据ack块已缓存满，则需直接处理掉，否则无法在被新达包触发处理
+            nextRoundBuffers && nextRoundBuffers.received >= nextRoundBuffers.blocks.size && this.handleAck(nextRoundBuffers, transporter);
+            sig = Receiver.genPbTransporterBy(transporter, 'ack', roundBuffers.blocks.size);
         }
+        this.communicator.send(TransportPath, PbTransporter.toBinary(sig));
+        this.blockBuffers.delete(ackIndex);
+    }
+
+    private handleWrite(roundBuffers: ReceivedBuffers) {
+        if (!this.writer) return;
+        let index = 0;
+        const finalBlock = new Uint8Array(roundBuffers.capacity);
+        roundBuffers.blocks.forEach(block => finalBlock.set(block as Uint8Array, (index++) * BlockSize));
+        // 合并写入优化IO
+        log.debug('finalBlock', finalBlock);
+        this.writer.write(finalBlock);
     }
 
     public handle(transporter: PbTransporter) {
@@ -261,26 +270,26 @@ export class Sender extends Transporter {
         const index = this.blockIndex++;
         if (index >= this.totalBlocks) return;
         this.inFlightPackets++;
-        console.log('before send', index, this.totalBlocks);
+        log.debug('before send', 'index', index, 'totalBlocks', this.totalBlocks);
         this.sending(transporter, index);
     }
 
     private sending(transporter: PbTransporter, index: number, retries: number = 0) {
         if (this.communicator.chan().bufferedAmount > MaxBufferedAmount)
             return setTimeout(() => this.sending(transporter, index), 50);
-        console.log('be sending', index, this.totalBlocks);
+        log.debug('be sending', 'index', index, 'totalBlocks', this.totalBlocks);
 
         const offset = index * BlockSize;
         const chunk = this.file.slice(offset, offset + BlockSize);
-        console.log(chunk);
+        // log.debug('chunk', chunk);
         chunk.stream().getReader().read().then(({value}) => {
             if (value !== undefined) {
                 const load: PbTransporterLoad = { index, body: value };
                 const sig = Sender.genPbTransporterBy(transporter, 'load', load);
-                console.log(sig);
+                // log.debug('sig', sig);
                 this.communicator.send(TransportPath, PbTransporter.toBinary(sig));
                 // 仅当未满窗时才自动续发
-                console.log(this.inFlightPackets, this.windowSize, AckRounds, this.inFlightPackets < this.windowSize || this.inFlightPackets < AckRounds);
+                log.debug('inFlightPackets', this.inFlightPackets, 'windowSize', this.windowSize, 'AckRounds', AckRounds, 'this.inFlightPackets < this.windowSize || this.inFlightPackets < AckRounds', this.inFlightPackets < this.windowSize || this.inFlightPackets < AckRounds);
                 (this.inFlightPackets < this.windowSize || this.inFlightPackets < AckRounds) && this.send(transporter);
             } else if (retries < 3) {
                 // 若读取失败，尝试自动重读
@@ -298,7 +307,7 @@ export class Sender extends Transporter {
     public handle(transporter: PbTransporter) {
         if (transporter.container.oneofKind === 'ack') {
             this.inFlightPackets -= transporter.container.ack;
-            console.log('got ack', this.inFlightPackets);
+            log.debug('got ack', 'this.inFlightPackets', this.inFlightPackets);
             // 不论何原因客户端收了过多的包，都将未达计数清零
             if (this.inFlightPackets < 0) this.inFlightPackets = 0;
             if (this.communicator.chan().bufferedAmount < BufferedAmountThreshold && this.windowSize < MaxWindowSize) {

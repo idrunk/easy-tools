@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@protobuf-ts/runtime": "^2.9.4",
+    "consola": "^3.4.2",
     "dayjs": "^1.11.13",
     "dexie": "^4.0.11",
     "html5-qrcode": "^2.3.8",
